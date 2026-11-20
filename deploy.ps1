@@ -47,4 +47,4 @@ node publish-aliases.js
 if ($LASTEXITCODE -ne 0) { throw 'Alias publish failed.' }
 Pop-Location
 
-Write-Host '[deploy] done: https://Nur-allhi.github.io/streaming_addon_builder/manifest.json'
+Write-Host '[deploy] done: https://raw.githubusercontent.com/Nur-allhi/streaming_addon_builder/gh-pages/manifest.json'
