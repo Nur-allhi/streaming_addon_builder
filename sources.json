@@ -2,11 +2,13 @@
   "sources": [
     {
       "id": "ctgfun-ftp",
+      "key": "FTP",
       "name": "ctgfun FTP",
       "baseUrl": "https://ftp.ctgfun.com/"
     },
     {
       "id": "ctgfun-movies",
+      "key": "MOVIES",
       "name": "ctgfun Movies",
       "baseUrl": "https://movie.ctgfun.com/"
     }

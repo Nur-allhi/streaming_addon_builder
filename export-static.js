@@ -139,28 +139,32 @@ function write(relativePath, data) {
 
 /** One movie + one series catalog per configured source directory. */
 function buildGroups(index) {
-  const sources = new Map();
+  const groupsMap = new Map();
   for (const item of [...(index.movies || []), ...(index.series || [])]) {
-    const key = String(item.sourceKey || 'other');
-    if (!sources.has(key)) {
-      sources.set(key, { key, name: item.source || key, movies: [], series: [] });
+    const sourceKey = String(item.sourceKey || 'other');
+    const folder = String(item.contentFolder || 'Other');
+    const shortKey = String(item.shortKey || sourceKey).toUpperCase();
+    const key = `${sourceKey}|${folder}`;
+    if (!groupsMap.has(key)) {
+      groupsMap.set(key, { sourceKey, folder, shortKey, movies: [], series: [] });
     }
-    sources.get(key)[item.type === 'movie' ? 'movies' : 'series'].push(item);
+    groupsMap.get(key)[item.type === 'movie' ? 'movies' : 'series'].push(item);
   }
 
   const groups = [];
-  for (const source of sources.values()) {
+  for (const group of groupsMap.values()) {
+    const slug = `${group.sourceKey}-${String(group.folder).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
     groups.push({
       type: 'movie',
-      id: `ctg-${source.key}-movies`,
-      name: `${source.name} Movies`,
-      items: source.movies
+      id: `ctg-${slug}-movies`,
+      name: `${group.folder} Movies [${group.shortKey}]`,
+      items: group.movies
     });
     groups.push({
       type: 'series',
-      id: `ctg-${source.key}-series`,
-      name: `${source.name} Series`,
-      items: source.series
+      id: `ctg-${slug}-series`,
+      name: `${group.folder} Series [${group.shortKey}]`,
+      items: group.series
     });
   }
   return groups;
