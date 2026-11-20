@@ -19,8 +19,15 @@ async function main() {
   const items = [...(index.movies || []), ...(index.series || [])];
   let cache = {};
   try { cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch { /* new */ }
+  const metaFile = path.join(DATA_DIR, 'meta-cache.json');
+  let metaCache = {};
+  try { metaCache = JSON.parse(fs.readFileSync(metaFile, 'utf8')); } catch { /* new */ }
 
-  const pending = items.filter((item) => !Object.prototype.hasOwnProperty.call(cache, keyFor(item.type, item.title, item.year)));
+  const pending = items.filter((item) => {
+    const key = keyFor(item.type, item.title, item.year);
+    const cached = cache[key];
+    return !cached || !cached.imdbId || !metaCache[key] || !metaCache[key].poster;
+  });
   console.log(`[imdb] ${items.length} items, ${pending.length} need lookup`);
 
   let done = 0;
@@ -28,6 +35,14 @@ async function main() {
   await mapLimit(pending, 8, async (item) => {
     const result = await lookupImdb(item.title, item.year, item.type);
     cache[keyFor(item.type, item.title, item.year)] = result || { imdbId: null };
+    if (result && result.poster) {
+      metaCache[keyFor(item.type, item.title, item.year)] = {
+        imdbId: result.imdbId,
+        poster: result.poster,
+        background: null,
+        name: result.name || item.title
+      };
+    }
     if (result && result.imdbId) resolved++;
     done++;
     if (done % 200 === 0) {
@@ -37,6 +52,7 @@ async function main() {
   });
 
   fs.writeFileSync(CACHE_FILE, JSON.stringify(cache), 'utf8');
+  fs.writeFileSync(metaFile, JSON.stringify(metaCache), 'utf8');
   console.log(`[imdb] done: ${resolved}/${pending.length} resolved`);
 }
 
