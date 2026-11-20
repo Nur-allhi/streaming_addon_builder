@@ -16,7 +16,9 @@ function contentFolderFor(rel) {
 
 const index = JSON.parse(fs.readFileSync(file, 'utf8'));
 for (const item of [...(index.movies || []), ...(index.series || [])]) {
-  item.contentFolder = contentFolderFor(item.rel);
+  item.contentFolder = item.sourceKey === 'ctgfun-movies'
+    ? 'English Movies'
+    : contentFolderFor(item.rel);
   item.shortKey = String(item.shortKey || (item.sourceKey === 'ctgfun-ftp' ? 'FTP' : 'MOVIES'));
 }
 fs.writeFileSync(file, JSON.stringify(index), 'utf8');

@@ -10,6 +10,7 @@
       "id": "ctgfun-movies",
       "key": "MOVIES",
       "name": "ctgfun Movies",
+      "folderLabel": "English Movies",
       "baseUrl": "https://movie.ctgfun.com/"
     }
   ]
