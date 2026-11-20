@@ -4,7 +4,6 @@
 
 param([switch]$Fresh)
 
-$ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $env:EXPORT_SEARCH_FILES = 'true'
 $env:EXPORT_RESOLVE_META = 'true'
@@ -32,13 +31,14 @@ Copy-Item -Recurse -Force (Join-Path $staticDir '*') $tmp
 
 Write-Host '[deploy] pushing to gh-pages...'
 Push-Location $tmp
-git init -b gh-pages | Out-Null
+git init -b gh-pages 2>$null | Out-Null
 git config user.name 'Nur-allhi'
 git config user.email 'Nur-allhi@users.noreply.github.com'
 git remote add origin "https://Nur-allhi:$env:GITHUB_TOKEN@github.com/Nur-allhi/streaming_addon_builder.git"
-git add -A
-git commit -m 'Deploy Nuvio add-on' | Out-Null
-git push -u origin gh-pages --force
+git add -A 2>$null
+git commit -m 'Deploy Nuvio add-on' 2>$null | Out-Null
+git push -u origin gh-pages --force 2>$null
+if ($LASTEXITCODE -ne 0) { throw 'Git push failed.' }
 Pop-Location
 
 Write-Host '[deploy] publishing IMDb episode stream aliases...'
@@ -46,9 +46,5 @@ Push-Location $repoRoot
 node publish-aliases.js
 if ($LASTEXITCODE -ne 0) { throw 'Alias publish failed.' }
 Pop-Location
-
-Write-Host '[deploy] enabling GitHub Pages...'
-gh api -X POST /repos/Nur-allhi/streaming_addon_builder/pages `
-  -f 'source[branch]=gh-pages' -f 'source[path]=/' 2>$null | Out-Null
 
 Write-Host '[deploy] done: https://Nur-allhi.github.io/streaming_addon_builder/manifest.json'
