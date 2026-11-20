@@ -25,9 +25,7 @@ Your laptop can be off — the TV only downloads small JSON files and plays the 
 https://Nur-allhi.github.io/streaming_addon_builder/manifest.json
 ```
 
-In Nuvio: **Addons → Install from URL** → paste the address above. Then search for a complete movie/show title, or browse **ctgfun Movies / ctgfun Series**, and press Play.
-
-Because GitHub Pages is static, search matches **complete titles** (e.g. `Anora`, `Wednesday`). Browsing the catalogs always works.
+In Nuvio: **Addons → Install from URL** → paste the address above. Each directory gets its own catalogs, e.g. **ctgfun FTP Movies**, **ctgfun FTP Series**, **ctgfun Movies Movies**, **ctgfun Movies Series**. Posters are included. You can also use Nuvio's global Search — titles are mapped to IMDb IDs so playback works from search results too.
 
 ### Updating later
 

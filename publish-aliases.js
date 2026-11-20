@@ -71,10 +71,6 @@ async function main() {
   const index = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'index.json'), 'utf8'));
   const imdb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'imdb-cache.json'), 'utf8'));
 
-  const ref = await api(`/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`);
-  const commitSha = ref.object.sha;
-  const commit = await api(`/repos/${OWNER}/${REPO}/git/commits/${commitSha}`);
-
   const tree = [];
   let count = 0;
   for (const item of index.series || []) {
@@ -94,27 +90,54 @@ async function main() {
     }
   }
 
-  // Remove the temporary probe file created during diagnosis.
-  tree.push({ path: 'probe%3Atest.json', mode: '100644', type: 'blob', sha: null });
+  // Skip anything already published (safe to re-run after a partial failure).
+  const ref0 = await api(`/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`);
+  const commit0 = await api(`/repos/${OWNER}/${REPO}/git/commits/${ref0.object.sha}`);
+  const remoteTree = await api(`/repos/${OWNER}/${REPO}/git/trees/${commit0.tree.sha}?recursive=1`);
+  const existing = new Set((remoteTree.tree || []).map((entry) => entry.path));
+  const missing = tree.filter((entry) => !existing.has(entry.path));
+  const deletions = [
+    { path: 'probe%3Atest.json', mode: '100644', type: 'blob', sha: null },
+    { path: 'zz-test.json', mode: '100644', type: 'blob', sha: null }
+  ].filter((entry) => existing.has(entry.path));
 
-  console.log(`[aliases] creating ${count} IMDb episode aliases...`);
-  const newTree = await api(`/repos/${OWNER}/${REPO}/git/trees`, {
-    method: 'POST',
-    body: { base_tree: commit.tree.sha, tree }
-  });
-  const newCommit = await api(`/repos/${OWNER}/${REPO}/git/commits`, {
-    method: 'POST',
-    body: {
-      message: `Add ${count} IMDb episode stream aliases`,
-      tree: newTree.sha,
-      parents: [commitSha]
+  const pending = [...missing, ...deletions];
+  console.log(`[aliases] ${tree.length} wanted, ${missing.length} missing, ${deletions.length} temp files to remove`);
+
+  const BATCH = 400;
+  for (let offset = 0; offset < pending.length; offset += BATCH) {
+    const batch = pending.slice(offset, offset + BATCH);
+    let published = false;
+    for (let attempt = 1; attempt <= 4 && !published; attempt++) {
+      try {
+        const ref = await api(`/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`);
+        const commitSha = ref.object.sha;
+        const commit = await api(`/repos/${OWNER}/${REPO}/git/commits/${commitSha}`);
+        const newTree = await api(`/repos/${OWNER}/${REPO}/git/trees`, {
+          method: 'POST',
+          body: { base_tree: commit.tree.sha, tree: batch }
+        });
+        const newCommit = await api(`/repos/${OWNER}/${REPO}/git/commits`, {
+          method: 'POST',
+          body: {
+            message: `Add IMDb episode stream aliases (${offset + 1}-${offset + batch.length})`,
+            tree: newTree.sha,
+            parents: [commitSha]
+          }
+        });
+        await api(`/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`, {
+          method: 'PATCH',
+          body: { sha: newCommit.sha, force: false }
+        });
+        published = true;
+      } catch (error) {
+        console.log(`[aliases] batch ${offset + 1} attempt ${attempt} failed: ${error.message.slice(0, 120)}`);
+        if (attempt === 4) throw error;
+      }
     }
-  });
-  await api(`/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`, {
-    method: 'PATCH',
-    body: { sha: newCommit.sha, force: false }
-  });
-  console.log(`[aliases] published ${count} aliases`);
+    console.log(`[aliases] ${Math.min(offset + BATCH, pending.length)}/${pending.length}`);
+  }
+  console.log(`[aliases] published ${count} aliases total`);
 }
 
 main().catch((err) => { console.error('[aliases]', err.message); process.exit(1); });
