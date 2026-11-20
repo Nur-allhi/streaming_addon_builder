@@ -1,0 +1,9 @@
+data/
+static/
+node_modules/
+*.log
+.env
+
+.playwright-mcp/
+nuvio-addon.zip
+

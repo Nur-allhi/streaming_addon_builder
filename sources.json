@@ -1,0 +1,14 @@
+{
+  "sources": [
+    {
+      "id": "ctgfun-ftp",
+      "name": "ctgfun FTP",
+      "baseUrl": "https://ftp.ctgfun.com/"
+    },
+    {
+      "id": "ctgfun-movies",
+      "name": "ctgfun Movies",
+      "baseUrl": "https://movie.ctgfun.com/"
+    }
+  ]
+}
