@@ -35,7 +35,7 @@ Push-Location $tmp
 git init -b gh-pages | Out-Null
 git config user.name 'Nur-allhi'
 git config user.email 'Nur-allhi@users.noreply.github.com'
-git remote add origin https://github.com/Nur-allhi/streaming_addon_builder.git
+git remote add origin "https://Nur-allhi:$env:GITHUB_TOKEN@github.com/Nur-allhi/streaming_addon_builder.git"
 git add -A
 git commit -m 'Deploy Nuvio add-on' | Out-Null
 git push -u origin gh-pages --force
