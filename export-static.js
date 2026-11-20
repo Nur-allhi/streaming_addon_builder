@@ -245,7 +245,9 @@ async function runExport() {
 
       if (item.type === 'movie') {
         write(`stream/movie/${id}.json`, { streams: item.files.map((file) => streamObject(item, file)) });
-      } else {
+      } else if (!String(id).startsWith('tt')) {
+        // IMDb-mapped series use colon-named alias files published by
+        // publish-aliases.js. Only unmapped series need local-safe files.
         for (const episode of item.episodes) {
           const files = item.episodes.filter(
             (e) => e.season === episode.season && e.episode === episode.episode
