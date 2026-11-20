@@ -1,0 +1,39 @@
+# Rebuild the add-on and publish it to the gh-pages branch.
+# Run from this folder:  .\deploy.ps1
+# Add -Fresh to force a full re-scan of the source directories first.
+
+param([switch]$Fresh)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$env:EXPORT_SEARCH_FILES = 'true'
+if ($Fresh) { $env:FORCE_SCAN = 'true' }
+
+Write-Host '[deploy] building static add-on...'
+Push-Location $repoRoot
+npm run export
+if ($LASTEXITCODE -ne 0) { throw 'Export failed.' }
+Pop-Location
+
+$staticDir = Join-Path $repoRoot 'static'
+$tmp = Join-Path $env:TEMP 'nuvio-ghpages-deploy'
+Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $tmp | Out-Null
+Copy-Item -Recurse -Force (Join-Path $staticDir '*') $tmp
+
+Write-Host '[deploy] pushing to gh-pages...'
+Push-Location $tmp
+git init -b gh-pages | Out-Null
+git config user.name 'Nur-allhi'
+git config user.email 'Nur-allhi@users.noreply.github.com'
+git remote add origin https://github.com/Nur-allhi/streaming_addon_builder.git
+git add -A
+git commit -m 'Deploy Nuvio add-on' | Out-Null
+git push -u origin gh-pages --force
+Pop-Location
+
+Write-Host '[deploy] enabling GitHub Pages...'
+gh api -X POST /repos/Nur-allhi/streaming_addon_builder/pages `
+  -f 'source[branch]=gh-pages' -f 'source[path]=/' 2>$null | Out-Null
+
+Write-Host '[deploy] done: https://Nur-allhi.github.io/streaming_addon_builder/manifest.json'

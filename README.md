@@ -11,52 +11,40 @@ Nuvio hosts no media itself — it can only read add-ons that serve a `manifest.
 
 ---
 
-## Recommended setup: Cloudflare Pages (no server to keep running)
+## Live setup: GitHub Pages (no server to keep running)
 
-Everything is built once into a static package and uploaded to Cloudflare. Your laptop can be off; the TV only downloads small JSON files and plays the videos. Search works for any text.
+The full add-on is built once and published to the `gh-pages` branch of:
 
-### 1. Build the add-on
+**https://github.com/Nur-allhi/streaming_addon_builder**
 
-```bash
+Your laptop can be off — the TV only downloads small JSON files and plays the videos straight from the source servers.
+
+### Add-on URL for Nuvio
+
+```
+https://Nur-allhi.github.io/streaming_addon_builder/manifest.json
+```
+
+In Nuvio: **Addons → Install from URL** → paste the address above. Then search for a complete movie/show title, or browse **ctgfun Movies / ctgfun Series**, and press Play.
+
+Because GitHub Pages is static, search matches **complete titles** (e.g. `Anora`, `Wednesday`). Browsing the catalogs always works.
+
+### Updating later
+
+One command rebuilds everything and republishes it:
+
+```powershell
 cd C:\Users\EftynurPc\Documents\02_Work\Dev_Projects\nuvio_addons
-npm run export
+.\deploy.ps1
 ```
 
-The first run scans both directory sites and can take several minutes. It writes the finished add-on to `static/`.
+Add `-Fresh` to force a full re-scan of the source directories:
 
-To make a ready-to-upload ZIP:
-
-```bash
-npm run zip
+```powershell
+.\deploy.ps1 -Fresh
 ```
 
-### 2. Upload to Cloudflare Pages
-
-1. Go to **dash.cloudflare.com → Workers & Pages → Create → Pages → Upload assets**.
-2. Drag in the `static/` folder (or the ZIP from `npm run zip`).
-3. Deploy. No build command, no output directory needed.
-4. Note your URL, e.g. `https://nuvio-addon.pages.dev`.
-
-### 3. Install in Nuvio on the TV
-
-**Addons → Install from URL** →
-
-```
-https://nuvio-addon.pages.dev/manifest.json
-```
-
-Then search for a movie/show or browse the **ctgfun Movies / ctgfun Series** catalogs and press Play.
-
-### 4. Updating later
-
-When you want fresh content:
-
-```bash
-FORCE_SCAN=true npm run export
-npm run zip
-```
-
-Then replace the files in your Cloudflare Pages project (or drag the new ZIP into a new deployment). Nuvio will pick up the new manifest automatically.
+`deploy.ps1` builds the static files (with exact-title search), pushes them to `gh-pages`, and makes sure GitHub Pages is enabled. No other steps needed.
 
 ---
 
@@ -118,7 +106,7 @@ Types: `movie`, `series`, `mixed`. Then re-run the export.
 
 ## How it works
 
-`lib/crawler.js` walks each Apache autoindex page, finds video files (`.mp4`, `.mkv`, …) and subtitles, parses release names into titles/years/seasons/episodes, and stores the result in `data/index.json`. `export-static.js` turns that into `manifest.json`, catalog pages, meta files, per-title stream files, a search index, and a small Cloudflare Pages function that answers searches.
+`lib/crawler.js` walks each Apache autoindex page, finds video files (`.mp4`, `.mkv`, …) and subtitles, parses release names into titles/years/seasons/episodes, and stores the result in `data/index.json`. `export-static.js` turns that into `manifest.json`, catalog pages, meta files, per-title stream files, and pre-generated exact-title search files. `deploy.ps1` publishes the result to the `gh-pages` branch.
 
 ---
 
