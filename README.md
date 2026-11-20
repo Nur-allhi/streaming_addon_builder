@@ -22,8 +22,10 @@ Your laptop can be off — the TV only downloads small JSON files and plays the 
 ### Add-on URL for Nuvio
 
 ```
-https://Nur-allhi.github.io/streaming_addon_builder/manifest.json
+https://raw.githubusercontent.com/Nur-allhi/streaming_addon_builder/gh-pages/manifest.json
 ```
+
+Note: GitHub Pages cannot build this add-on because the IMDb episode stream files contain `:` in their filenames. The `raw.githubusercontent.com` URL above serves the exact same files correctly and is the address to use in Nuvio.
 
 In Nuvio: **Addons → Install from URL** → paste the address above. Each directory gets its own catalogs, e.g. **ctgfun FTP Movies**, **ctgfun FTP Series**, **ctgfun Movies Movies**, **ctgfun Movies Series**. Posters are included. You can also use Nuvio's global Search — titles are mapped to IMDb IDs so playback works from search results too.
 
