@@ -17,6 +17,17 @@ const { crawl, defaultConfig } = require('./lib/crawler');
 const { createResolver } = require('./lib/metadata');
 const { normalizeTitle } = require('./lib/util');
 
+let imdbCache = {};
+
+function imdbKey(type, title, year) {
+  return `${type}|${normalizeTitle(title)}|${year || ''}`;
+}
+
+function publicId(item) {
+  const entry = imdbCache[imdbKey(item.type, item.title, item.year)];
+  return entry && entry.imdbId ? entry.imdbId : item.id;
+}
+
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const OUT_DIR = path.resolve(process.env.STATIC_DIR || path.join(__dirname, 'static'));
 const PAGE_SIZE = Number(process.env.PAGE_SIZE || 500);
@@ -30,28 +41,15 @@ const store = createStore(DATA_DIR);
 const MANIFEST = {
   id: 'org.ctgfun.directories.static',
   version: '1.0.0',
-  name: 'ctgfun Direct (Static)',
-  description: 'Direct movie and series streams indexed from ftp.ctgfun.com and movie.ctgfun.com',
+  name: 'Nuvio Streams',
+  description: 'Direct movie and series streams from your configured directories',
   types: ['movie', 'series'],
   resources: [
-    { name: 'catalog', types: ['movie', 'series'], idPrefixes: ['ctg'] },
-    { name: 'meta', types: ['movie', 'series'], idPrefixes: ['ctg'] },
-    { name: 'stream', types: ['movie', 'series'], idPrefixes: ['ctg'] }
+    { name: 'catalog', types: ['movie', 'series'], idPrefixes: ['tt', 'ctg'] },
+    { name: 'meta', types: ['movie', 'series'], idPrefixes: ['tt', 'ctg'] },
+    { name: 'stream', types: ['movie', 'series'], idPrefixes: ['tt', 'ctg'] }
   ],
-  catalogs: [
-    {
-      type: 'movie',
-      id: 'ctg-movies',
-      name: 'ctgfun Movies',
-      extra: [{ name: 'search', isRequired: false }, { name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'series',
-      id: 'ctg-series',
-      name: 'ctgfun Series',
-      extra: [{ name: 'search', isRequired: false }, { name: 'skip', isRequired: false }]
-    }
-  ],
+  catalogs: [], // filled per source in runExport()
   behaviorHints: { configurable: false }
 };
 
@@ -66,7 +64,7 @@ function getCached(item, cache) {
 function preview(item, cache) {
   const meta = getCached(item, cache);
   return {
-    id: item.id,
+    id: publicId(item),
     type: item.type,
     name: item.title,
     poster: meta && meta.poster ? meta.poster : undefined,
@@ -77,8 +75,9 @@ function preview(item, cache) {
 
 function metaObject(item, cache) {
   const meta = getCached(item, cache);
+  const id = publicId(item);
   const result = {
-    id: item.id,
+    id,
     type: item.type,
     name: item.title,
     poster: meta && meta.poster ? meta.poster : undefined,
@@ -86,15 +85,23 @@ function metaObject(item, cache) {
     releaseInfo: item.year || undefined,
     description: `Direct stream indexed from ${item.source}`
   };
-  if (item.type === 'series') {
+
+  // Inline streams let Nuvio play items opened from global search even when
+  // the stream endpoint URL uses an ID format we cannot write to disk.
+  if (item.type === 'movie') {
+    result.videos = [{ id, title: item.title, streams: item.files.map((file) => streamObject(item, file)) }];
+    result.behaviorHints = { defaultVideoId: id, hasScheduledVideos: false };
+  } else {
     result.videos = [...item.episodes]
       .sort((a, b) => a.season - b.season || a.episode - b.episode)
       .map((episode) => ({
-        id: `${item.id}~${episode.season}~${episode.episode}`,
+        id: `${id}:${episode.season}:${episode.episode}`,
         title: `S${String(episode.season).padStart(2, '0')}E${String(episode.episode).padStart(2, '0')}`,
         season: episode.season,
-        episode: episode.episode
+        episode: episode.episode,
+        streams: [streamObject(item, episode)]
       }));
+    result.behaviorHints = { hasScheduledVideos: true };
   }
   return { meta: result };
 }
@@ -130,6 +137,35 @@ function write(relativePath, data) {
   fileCount++;
 }
 
+/** One movie + one series catalog per configured source directory. */
+function buildGroups(index) {
+  const sources = new Map();
+  for (const item of [...(index.movies || []), ...(index.series || [])]) {
+    const key = String(item.sourceKey || 'other');
+    if (!sources.has(key)) {
+      sources.set(key, { key, name: item.source || key, movies: [], series: [] });
+    }
+    sources.get(key)[item.type === 'movie' ? 'movies' : 'series'].push(item);
+  }
+
+  const groups = [];
+  for (const source of sources.values()) {
+    groups.push({
+      type: 'movie',
+      id: `ctg-${source.key}-movies`,
+      name: `${source.name} Movies`,
+      items: source.movies
+    });
+    groups.push({
+      type: 'series',
+      id: `ctg-${source.key}-series`,
+      name: `${source.name} Series`,
+      items: source.series
+    });
+  }
+  return groups;
+}
+
 async function runExport() {
   fileCount = 0;
   let index = store.loadIndex();
@@ -146,6 +182,12 @@ async function runExport() {
   }
 
   const cache = store.loadMetaCache();
+  const imdbFile = path.join(DATA_DIR, 'imdb-cache.json');
+  try {
+    imdbCache = JSON.parse(fs.readFileSync(imdbFile, 'utf8'));
+  } catch {
+    imdbCache = {};
+  }
   if (RESOLVE_META) {
     console.log('[export] resolving posters/IMDb IDs (this may take a while)...');
     const resolver = createResolver({ tmdbKey: TMDB_API_KEY, cache, onCacheChange: store.saveMetaCache });
@@ -160,7 +202,6 @@ async function runExport() {
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  write('manifest.json', MANIFEST);
   fs.writeFileSync(path.join(OUT_DIR, '.nojekyll'), '');
 
   // Cloudflare Pages function: adds live search on top of the static files.
@@ -176,10 +217,14 @@ async function runExport() {
     "import { handleSearch } from '../../../search-handler.mjs';\nexport const onRequestGet = handleSearch;\n"
   );
 
-  const groups = [
-    { type: 'movie', id: 'ctg-movies', items: index.movies || [] },
-    { type: 'series', id: 'ctg-series', items: index.series || [] }
-  ];
+  const groups = buildGroups(index);
+  MANIFEST.catalogs = groups.map((group) => ({
+    type: group.type,
+    id: group.id,
+    name: group.name,
+    extra: [{ name: 'search', isRequired: false }, { name: 'skip', isRequired: false }]
+  }));
+  write('manifest.json', MANIFEST);
 
   for (const group of groups) {
     for (let offset = 0; offset < group.items.length; offset += PAGE_SIZE) {
@@ -191,16 +236,17 @@ async function runExport() {
     }
 
     for (const item of group.items) {
-      write(`meta/${item.type}/${item.id}.json`, metaObject(item, cache));
+      const id = publicId(item);
+      write(`meta/${item.type}/${id}.json`, metaObject(item, cache));
 
       if (item.type === 'movie') {
-        write(`stream/movie/${item.id}.json`, { streams: item.files.map((file) => streamObject(item, file)) });
+        write(`stream/movie/${id}.json`, { streams: item.files.map((file) => streamObject(item, file)) });
       } else {
         for (const episode of item.episodes) {
           const files = item.episodes.filter(
             (e) => e.season === episode.season && e.episode === episode.episode
           );
-          write(`stream/series/${item.id}~${episode.season}~${episode.episode}.json`, {
+          write(`stream/series/${id}~${episode.season}~${episode.episode}.json`, {
             streams: files.map((file) => streamObject(item, file))
           });
         }
@@ -231,7 +277,7 @@ async function runExport() {
   const searchIndex = [...(index.movies || []), ...(index.series || [])].map((item) => {
     const meta = getCached(item, cache);
     return {
-      id: item.id,
+      id: publicId(item),
       type: item.type,
       name: item.title,
       year: item.year || null,

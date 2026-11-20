@@ -7,10 +7,19 @@ param([switch]$Fresh)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $env:EXPORT_SEARCH_FILES = 'true'
+$env:EXPORT_RESOLVE_META = 'true'
+# Public TMDB key shipped with Nuvio's own web client; override with your own if you prefer.
+if (-not $env:TMDB_API_KEY) { $env:TMDB_API_KEY = '01926d2187b6a5d861eefc750e9df3e3' }
 if ($Fresh) { $env:FORCE_SCAN = 'true' }
 
-Write-Host '[deploy] building static add-on...'
+$env:GITHUB_TOKEN = gh auth token
+
+Write-Host '[deploy] resolving IMDb IDs...'
 Push-Location $repoRoot
+node resolve-imdb.js
+if ($LASTEXITCODE -ne 0) { throw 'IMDb resolution failed.' }
+
+Write-Host '[deploy] building static add-on...'
 npm run export
 if ($LASTEXITCODE -ne 0) { throw 'Export failed.' }
 Pop-Location
@@ -30,6 +39,12 @@ git remote add origin https://github.com/Nur-allhi/streaming_addon_builder.git
 git add -A
 git commit -m 'Deploy Nuvio add-on' | Out-Null
 git push -u origin gh-pages --force
+Pop-Location
+
+Write-Host '[deploy] publishing IMDb episode stream aliases...'
+Push-Location $repoRoot
+node publish-aliases.js
+if ($LASTEXITCODE -ne 0) { throw 'Alias publish failed.' }
 Pop-Location
 
 Write-Host '[deploy] enabling GitHub Pages...'
